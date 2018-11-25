@@ -17,7 +17,7 @@
     const int MAX_PACKETS = 100;
     const int MAX_QUEUE = 9;
     const float TIME_ARRIVAL_MS = 1.0;
-    const float TIME_SERVICE_MS = 1.0;
+    const float TIME_SERVICE_MS = 4.0;
 
     struct packet {
         int id;
@@ -28,7 +28,7 @@
 
     struct queue {
         char *id;
-        int head, tail, size, lost;
+        int head, tail, len, lost;
         unsigned int capacity;
         struct packet *array;
     };
@@ -39,8 +39,8 @@
         
         queue->id = qid;
         queue->capacity = capacity;
-        queue->head = queue->size = queue->lost = 0;
-        queue->tail = -1;
+        queue->len = queue->lost = 0;
+        queue->head = queue->tail = 0;
         
         queue->array = (struct packet *) malloc(queue->capacity * sizeof(struct packet));
 
@@ -59,22 +59,47 @@
     }
 
     int full(struct queue *q) {
-        return q->size == q->capacity;
+        
+        return q->len >= q->capacity;
+        
     }
 
     int empty(struct queue *q) {
-        return q->size == 0;
+        
+        return q->len == 0;
+        
     }
 
     void display(struct queue *q) {
         
+        if (empty(q)) { printf("\n"); return; }
+        
         int i;
         
-        for(i = 0; i <= (q->size - 1); i++) {
-        
-            printf("%d ", q->array[i].id);
-        
+        if(q->head < q->tail) {
+            
+            for(i = q->head; i < q->tail; i++) {
+            
+                printf("%d ", q->array[i].id);
+            
+            }
+          
+        } else {
+            
+            for(i = q->head; i < q->capacity; i++) {
+                
+                printf("%d ", q->array[i].id);
+                
+            }
+            
+//            for(i = q->tail; i < q->head - 1; i++) {
+//
+//                printf("%d ", q->array[i].id);
+//
+//            }
+            
         }
+        
         
         printf("\n");
         
@@ -82,38 +107,36 @@
 
     void enqueue(struct queue *q, struct packet *p) {
         
-        if(full(q)) { q->lost++; return; }
+        if(full(q)) { q->len = q->capacity; q->lost++; return; }
         
         struct timeval t;
         
         gettimeofday(&t, 0);
         
         p->arrival_time = t;
-        q->tail = (q->tail + 1) % q->capacity;
         q->array[q->tail] = *p;
-        q->size++;
+        q->tail = (q->tail + 1) % q->capacity;
+        q->len++;
         
-        printf("%s enqueued: 1 | head: %d | tail: %d | count %d | lost: %d | queue: ",q->id, q->head, q->tail, q->size, q->lost);
+        printf("%s enqueued: 1 | head: %d | tail: %d | count %d | lost: %d | queue: ",q->id, q->head, q->tail, q->len, q->lost);
         display(q);
         
     }
 
     void dequeue(struct queue *q) {
         
-        if(empty(q)) { q->head = q->tail = 0; q->size = 0; return; }
+        if(empty(q)) { q->len = 0; return; }
         
         struct timeval t;
         
         gettimeofday(&t, 0);
 
-        struct packet p = q->array[q->tail];
-        
-        p.departure_time = t;
+        q->array[q->head].departure_time = t;
         
         q->head = (q->head + 1) % q->capacity;
-        q->size--;
+        q->len--;
         
-        printf("%s dequeued: 1 | head: %d | tail: %d | count %d | lost: %d | queue: ",q->id, q->head, q->tail, q->size, q->lost);
+        printf("%s dequeued: 1 | head: %d | tail: %d | count %d | lost: %d | queue: ",q->id, q->head, q->tail, q->len, q->lost);
         display(q);
         
     }
@@ -128,9 +151,8 @@
         
         int i;
 
-        struct packet *p = init_packet(0);
-        
         for(i = 0; i <= (q1->capacity - 1); i++) {
+            struct packet *p = init_packet(i);
             enqueue(q1, p);
             enqueue(q2, p);
         }
@@ -142,6 +164,7 @@
         
         gettimeofday(&start, 0);
         
+        printf("\n*** start ***\n\n");
         for(i = 0; i <= MAX_PACKETS; i++) {
         
             gettimeofday(&t, 0);
@@ -159,19 +182,23 @@
 
             if(random_packet == 0) {
 
-                if(fmod(t.tv_usec, TIME_ARRIVAL_MS) == 0) {
-
-                    enqueue(q1, p);
+                do {
+                
+                    gettimeofday(&t, 0);
                     
-                }
+                } while(fmod(t.tv_usec, TIME_ARRIVAL_MS) != 0);
+
+                enqueue(q1, p);
                 
             } else {
                 
-                if(fmod(t.tv_usec, TIME_ARRIVAL_MS) == 0) {
+                do {
                     
-                    enqueue(q2, p);
+                    gettimeofday(&t, 0);
                     
-                }
+                } while(fmod(t.tv_usec, TIME_ARRIVAL_MS) != 0);
+                
+                enqueue(q2, p);
                 
             }
             
