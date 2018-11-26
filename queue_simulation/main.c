@@ -5,6 +5,21 @@
     //  Created by Bradley Morgan on 11/14/18.
     //  Copyright © 2018 BiT8. All rights reserved.
     //
+    //
+
+    // this program simulates a queue using a circular array
+    // data structure to track arrivals and departures, i.e...
+    //
+    // departure<-[head][*][*][*][tail]<-arrival
+    //
+    // this data structure is used as an efficient way
+    // to simulate a queue at O(1) complexity (if implemented
+    // correctly)
+    //
+    // this implementation uses an arrival (packet) data structure
+    // and a queue data structure holding an array of these arrivals
+    //
+    // arrival rate (λ) and service rate (µ) are defined
 
     #include <stdio.h>
     #include <stdlib.h>
@@ -14,23 +29,31 @@
     #include <unistd.h>
     #include <string.h>
 
-    const int MAX_PACKETS = 100;
+    const int MAX_PACKETS = 1000;
     const int MAX_QUEUE = 9;
+
     const float TIME_ARRIVAL_MS = 1.0;
-    const float TIME_SERVICE_MS = 4.0;
+    const float TIME_SERVICE_MS = 3.0;
 
     struct packet {
+        
         int id;
         int queue_position;
+        
         struct timeval arrival_time;
         struct timeval departure_time;
+        
     };
 
     struct queue {
+        
         char *id;
-        int head, tail, len, lost;
-        unsigned int capacity;
+        
+        int head, tail;
+        int len, capacity, lost;
+        
         struct packet *array;
+        
     };
 
     struct queue *init_queue(unsigned int capacity, char *qid) {
@@ -92,14 +115,13 @@
                 
             }
             
-//            for(i = q->tail; i < q->head - 1; i++) {
-//
-//                printf("%d ", q->array[i].id);
-//
-//            }
+            for(i = 0; i < q->tail; i++) {
+
+                printf("%d ", q->array[i].id);
+
+            }
             
         }
-        
         
         printf("\n");
         
@@ -180,23 +202,17 @@
             
             int random_packet = rand() % 2;
 
-            if(random_packet == 0) {
-
-                do {
+            do {
                 
-                    gettimeofday(&t, 0);
-                    
-                } while(fmod(t.tv_usec, TIME_ARRIVAL_MS) != 0);
+                gettimeofday(&t, 0);
+                
+            } while(fmod(t.tv_usec, TIME_ARRIVAL_MS) != 0);
+            
+            if(random_packet == 0) {
 
                 enqueue(q1, p);
                 
             } else {
-                
-                do {
-                    
-                    gettimeofday(&t, 0);
-                    
-                } while(fmod(t.tv_usec, TIME_ARRIVAL_MS) != 0);
                 
                 enqueue(q2, p);
                 
