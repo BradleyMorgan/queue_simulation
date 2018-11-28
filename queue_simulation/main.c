@@ -29,11 +29,12 @@
     #include <unistd.h>
     #include <string.h>
 
-    const int MAX_PACKETS = 1000;
+    const int MAX_PACKETS = 10000;
     const int MAX_QUEUE = 9;
+    const int MAX_SERVERS = 2;
 
-    const float TIME_ARRIVAL_MS = 1.0;
-    const float TIME_SERVICE_MS = 3.0;
+    const float TIME_ARRIVAL_MS = 100000.0;
+    const float TIME_SERVICE_MS = 200000.0;
 
     struct packet {
         
@@ -163,13 +164,55 @@
         
     }
 
+    float factorial(float f) {
+        
+        if ( f == 0.0 ) {
+            return 1.0;
+        }
+        
+        float res = f * factorial(f - 1.0);
+        
+        return res;
+    }
+
+    float calc_bp(float lambda, float mu) {
+        
+        // for an m/m/c/k queue, load is arrival rate divided by the service rate
+        // multiplied by the number of servers ...
+        
+        float load = lambda / (MAX_SERVERS * mu);
+        
+        //float k = MAX_QUEUE * MAX_SERVERS;
+        
+        float f1 = powf(load, MAX_SERVERS) / factorial(MAX_SERVERS);
+    
+        printf("\nload: %3.5f, f1: %3.5f ", load, f1);
+        
+        float f2 = 0.0;
+        
+        int i;
+        
+        for (i = 0; i <= MAX_SERVERS; i++) {
+            f2 += (powf(load, i) / factorial(i));
+        }
+        
+        float f3 = f1 / f2;
+        
+        printf(" f2: %3.5f, f3: %3.5f", f2, f3);
+        
+        return f3;
+        
+    }
+
     int main(int argc, const char * argv[]) {
         
         // initialize the queues
         
+        calc_bp(TIME_ARRIVAL_MS, TIME_SERVICE_MS);
+        
         struct queue *q1 = init_queue(MAX_QUEUE, "1Q");
         struct queue *q2 = init_queue(MAX_QUEUE, "2Q");
-        struct timeval start, end, t;
+        struct timespec start, end, t;
         
         int i;
 
@@ -184,37 +227,44 @@
             dequeue(q2);
         }
         
-        gettimeofday(&start, 0);
+        clock_gettime(CLOCK_MONOTONIC, &start);
         
         printf("\n*** start ***\n\n");
+        
         for(i = 0; i <= MAX_PACKETS; i++) {
-        
-            gettimeofday(&t, 0);
-        
+
+            int random_packet = rand() % MAX_SERVERS;
+            
             struct packet *p = init_packet(i);
             
-            if(fmod(t.tv_usec, TIME_SERVICE_MS) == 0) {
+            do {
+                
+                clock_gettime(CLOCK_MONOTONIC, &t);
+                
+            } while(fmod(t.tv_nsec, TIME_ARRIVAL_MS) != 0.0 && fmod(t.tv_nsec, TIME_SERVICE_MS) != 0.0);
+            
+            if(fmod(t.tv_nsec, TIME_SERVICE_MS) == 0.0) {
+                
+                printf("DEPARTURE: %lu\n", t.tv_nsec);
                 
                 dequeue(q1);
                 dequeue(q2);
                 
             }
             
-            int random_packet = rand() % 2;
+            if(fmod(t.tv_nsec, TIME_ARRIVAL_MS) == 0.0) {
+                
+                printf("ARRIVAL: %lu\n", t.tv_nsec);
+                
+                if(random_packet == 0) {
 
-            do {
-                
-                gettimeofday(&t, 0);
-                
-            } while(fmod(t.tv_usec, TIME_ARRIVAL_MS) != 0);
-            
-            if(random_packet == 0) {
+                    enqueue(q1, p);
 
-                enqueue(q1, p);
-                
-            } else {
-                
-                enqueue(q2, p);
+                } else {
+
+                    enqueue(q2, p);
+
+                }
                 
             }
             
@@ -227,7 +277,7 @@
         
         printf("Blocking Probability (%d + %d / %d): %5.5f\n", q1->lost, q2->lost, MAX_PACKETS, blocking_probability);
         
-        gettimeofday(&end, 0);
+        clock_gettime(CLOCK_MONOTONIC, &end);
         
         return 0;
         
