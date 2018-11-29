@@ -20,6 +20,8 @@
     // and a queue data structure holding an array of these arrivals
     //
     // arrival rate (λ) and service rate (µ) are defined
+    //
+    //
 
     #include <stdio.h>
     #include <stdlib.h>
