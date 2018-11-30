@@ -11,12 +11,12 @@
 #include <string.h>
 #include <math.h>
 
-const int MAX_TIME = 100000;
+const int MAX_TIME = 10000;
 const int MAX_QLEN = 10;
 const int MAX_SERV = 2;
 
-const int LAMBDA = 1;
-const int MU = 2;
+const double LAMBDA = 1.0;
+const double MU = 4.0;
 
 struct packet {
     
@@ -50,7 +50,7 @@ struct queue *init_queue(unsigned int capacity, char *qid) {
     queue->len = queue->lost = 0;
     queue->head = queue->tail = 0;
     
-    queue->array = (struct packet *) malloc(queue->capacity * sizeof(struct packet));
+    queue->array = (struct packet *) malloc(MAX_TIME * sizeof(struct packet));
     
     return queue;
     
@@ -61,6 +61,7 @@ struct packet *init_packet(int id) {
     struct packet *p = (struct packet *) malloc(sizeof(struct packet));
     
     p->id = id;
+    p->arrival_time = 0.0;
     
     return p;
     
@@ -85,37 +86,32 @@ void display(struct queue *q) {
     int i;
     
     if(q->head < q->tail) {
-        
         for(i = q->head; i < q->tail; i++) {
             printf("%d ", q->array[i].id);
         }
-        
     } else {
-        
         for(i = q->head; i < q->capacity; i++) {
             printf("%d ", q->array[i].id);
         }
-        
         for(i = 0; i < q->tail; i++) {
             printf("%d ", q->array[i].id);
         }
-        
     }
     
     printf("\n");
     
 }
 
-double exp_random(int lambda){
+double exp_random(double mean){
     
     // generate an exponentially distributed random number
-    // based on the arrival rate ...
+    // based on the supplied rate ...
     
     double u;
     
-    u = rand() / (RAND_MAX + 1.0);
+    u = (double)rand() / (double)RAND_MAX;
     
-    return -log(1- u) / lambda;
+    return -log(1-u) / mean;
     
 }
 
@@ -129,35 +125,19 @@ double service_wait(struct packet *p) {
 
 void enqueue(struct queue *q, struct packet *p) {
     
-    if(full(q)) { q->len = q->capacity; q->lost++; return; }
-    
-    struct packet prev = q->array[q->tail-1];
-    
-    p->service_duration = exp_random(MU);
-    p->arrival_time = prev.arrival_time + exp_random(LAMBDA);
+    struct packet prev = q->len > 0 ? q->array[q->len] : *p;
+
+    p->service_duration = exp_random(1.0 / MU);
+    p->arrival_time = q->len > 0 ? prev.arrival_time + exp_random(1.0 / LAMBDA) : 0.0;
     p->service_start_time = p->arrival_time > service_end(&prev) ? p->arrival_time : service_end(&prev);
     p->departure_time = service_end(p);
     
-    q->array[q->tail] = *p;
-    q->tail = (q->tail + 1) % q->capacity;
     q->len++;
+    q->array[q->len] = *p;
+    q->tail = q->len;
+    q->head = q->len - q->capacity;
     
-    printf("%s enqueued: 1 | arrival_time: %2.6f | service_time: %2.6f | departure_time: %2.6f | head: %d | tail: %d | count %d | lost: %d | queue: ",q->id, p->arrival_time, p->service_start_time, p->departure_time, q->head, q->tail, q->len, q->lost);
-    display(q);
-    
-}
-
-void dequeue(struct queue *q) {
-    
-    if(empty(q)) { q->len = 0; return; }
-
-    //q->array[q->head].departure_time = t;
-    
-    q->head = (q->head + 1) % q->capacity;
-    q->len--;
-    
-    printf("%s dequeued: 1 | head: %d | tail: %d | count %d | lost: %d | queue: ",q->id, q->head, q->tail, q->len, q->lost);
-    display(q);
+    printf("%s enqueued: %d | arrival_time: %2.6f | service_time: %2.6f | service_duration: %2.6f | departure_time: %2.6f | count %d\n",q->id, p->id, p->arrival_time, p->service_start_time, p->service_duration, p->departure_time, q->len);
     
 }
 
@@ -173,13 +153,13 @@ int main(void) {
         struct packet *p = init_packet(t);
         
         int random_packet = rand() % MAX_SERV;
-        
+
         if(random_packet == 0) {
-            
+        
             enqueue(q1, p);
             
         } else {
-            
+        
             enqueue(q2, p);
             
         }
