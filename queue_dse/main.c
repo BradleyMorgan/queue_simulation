@@ -5,18 +5,23 @@
 //  Created by Bradley Morgan on 11/29/18.
 //  Copyright © 2018 BiT8. All rights reserved.
 //
+//  This program uses discrete event simulation (a.k.a. event driven simulation)
+//  to measure the performance of a M/M/2/10 poisson system.
+//
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 
-const int MAX_TIME = 10000;
-const int MAX_QLEN = 10;
-const int MAX_SERV = 2;
+const int MAX_TIME = 1000; // time interval of sample (or number of packets)
+const int MAX_QLEN = 10; // maximum queue length
+const int MAX_SERV = 2; // number of servers
 
-const double LAMBDA = 1.0;
-const double MU = 4.0;
+const double LAMBDA = 1.0; // intensity, arrival rate (packets per unit time)
+const double MU = 2.0; // service rate (processed packets per unit time)
+
+FILE *f;
 
 struct packet {
     
@@ -27,6 +32,7 @@ struct packet {
     double departure_time;
     double service_start_time;
     double service_duration;
+    double wait_duration;
     
 };
 
@@ -36,6 +42,8 @@ struct queue {
     
     int head, tail;
     int len, capacity, lost;
+    
+    double wait;
     
     struct packet *array;
     
@@ -127,24 +135,29 @@ void enqueue(struct queue *q, struct packet *p) {
     
     struct packet prev = q->len > 0 ? q->array[q->len] : *p;
 
-    p->service_duration = exp_random(1.0 / MU);
-    p->arrival_time = q->len > 0 ? prev.arrival_time + exp_random(1.0 / LAMBDA) : 0.0;
+    p->arrival_time = prev.arrival_time + exp_random(LAMBDA);
+    p->service_duration = exp_random(MU);
     p->service_start_time = p->arrival_time > service_end(&prev) ? p->arrival_time : service_end(&prev);
     p->departure_time = service_end(p);
+    p->wait_duration = p->service_start_time - p->arrival_time;
     
     q->len++;
     q->array[q->len] = *p;
-    q->tail = q->len;
-    q->head = q->len - q->capacity;
     
-    printf("%s enqueued: %d | arrival_time: %2.6f | service_time: %2.6f | service_duration: %2.6f | departure_time: %2.6f | count %d\n",q->id, p->id, p->arrival_time, p->service_start_time, p->service_duration, p->departure_time, q->len);
+    printf("%s enqueued: %d | arrival_time: %2.6f | service_start_time: %2.6f | service_duration: %2.6f | departure_time: %2.6f | wait_duration: %2.6f | head: %d | tail: %d | lost: %d\n", q->id, p->id, p->arrival_time, p->service_start_time, p->service_duration, p->departure_time, p->wait_duration, q->head, q->tail, q->lost);
+    
+    fprintf(f, "%s,%d,%2.6f,%2.6f,%2.6f,%2.6f,%2.6f,%d,%d,%d\n", q->id, p->id, p->arrival_time, p->service_start_time, p->service_duration, p->departure_time, p->wait_duration, q->head, q->tail, q->lost);
     
 }
 
 int main(void) {
     
+    f = fopen("out.csv", "w");
+    
+    fprintf(f, "queue,packet,arrival_time,service_start_time,service_duration,departure_time,wait_duration,head,tail,lost\n");
+    
     struct queue *q1 = init_queue(MAX_QLEN, "q1");
-    struct queue *q2 = init_queue(MAX_QLEN, "q2");
+//    struct queue *q2 = init_queue(MAX_QLEN, "q2");
     
     int t;
     
@@ -152,18 +165,18 @@ int main(void) {
         
         struct packet *p = init_packet(t);
         
-        int random_packet = rand() % MAX_SERV;
-
-        if(random_packet == 0) {
-        
+//        int random_packet = rand() % MAX_SERV;
+//
+//        if(random_packet == 0) {
+//
             enqueue(q1, p);
             
-        } else {
-        
-            enqueue(q2, p);
-            
-        }
-        
+//        } else {
+//
+//            enqueue(q2, p);
+//
+//        }
+//
     }
     
     return 0;
