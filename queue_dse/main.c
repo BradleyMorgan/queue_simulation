@@ -132,11 +132,11 @@ double service_wait(struct packet *p) {
 
 void enqueue(struct queue *q, struct packet *p) {
     
-    if(full(q)) { q->lost++; return; }
+    //if(full(q)) { q->lost++; return; }
     
     // create a reference to the previous packet
     
-    struct packet prev = q->array[q->tail - 1];
+    struct packet prev = q->array[q->tail];
 
     // arrivals occur in exponential distribution
     // lambda * exp(-lambda * x)
@@ -160,15 +160,27 @@ void enqueue(struct queue *q, struct packet *p) {
     // each queue holds a finite capacity of MAX_QLEN
     // we use a circular array with a head and tail pointer
     // to track the front and back packets
+
+    // [1.0][1.4][1.6][1.5][1.8][1.12][1.9][1.9][1.10][1.11]
     
-    q->array[q->tail] = *p;
-    q->tail = (q->tail + 1) % q->capacity;
     
-    if(prev.departure_time < p->arrival_time) {
-        q->head = (q->head + 1) % q->capacity;
+    // if the previous packet has already left the system
+    // before the current packet arrives...
+    
+    if(p->arrival_time > q->array[q->head].departure_time) {
+        q->head = q->tail = (q->head + 1) % q->capacity;
+        q->tail = q->head;
+        q->len--;
+    } else {
+        q->tail = (q->tail + 1) % q->capacity;
+        q->len++;
     }
     
-    printf("%s enqueued: %d | arrival_time: %2.6f | departure_time: %2.6f | service_start_time: %2.6f | service_duration: %2.6f | head: %d | tail: %d | lost: %d | queue_position: %d\n", q->id, p->id, p->arrival_time, p->departure_time, p->service_start_time, p->service_duration, q->head, q->tail, q->lost, p->queue_position);
+    
+    q->array[q->tail] = *p;
+
+
+    printf("%s enqueued: %d | arrival_time: %2.6f | departure_time: %2.6f | service_start_time: %2.6f | service_duration: %2.6f | head: %d | tail: %d | len: %d | lost: %d | queue_position: %d\n", q->id, p->id, p->arrival_time, p->departure_time, p->service_start_time, p->service_duration, q->head, q->tail, q->len, q->lost, p->queue_position);
     
     fprintf(f, "%s,%d,%2.6f,%2.6f,%2.6f,%2.6f,%d,%d,%d\n", q->id, p->id, p->arrival_time, p->service_start_time, p->service_duration, p->departure_time, q->head, q->tail, q->lost);
     
