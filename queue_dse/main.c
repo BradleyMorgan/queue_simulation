@@ -19,7 +19,7 @@ const int MAX_QLEN = 10; // maximum queue length
 const int MAX_SERV = 2; // number of servers
 
 const double LAMBDA = 1.0; // intensity, arrival rate (packets per unit time)
-const double MU = 2.0; // service rate (processed packets per unit time)
+const double MU = 1.0; // service rate (processed packets per unit time)
 
 FILE *f;
 
@@ -33,6 +33,7 @@ struct packet {
     double service_start_time;
     double service_duration;
     double wait_duration;
+    double wait_overlap;
     
 };
 
@@ -58,7 +59,7 @@ struct queue *init_queue(unsigned int capacity, char *qid) {
     queue->len = queue->lost = 0;
     queue->head = queue->tail = 0;
     
-    queue->array = (struct packet *) malloc(MAX_TIME * sizeof(struct packet));
+    queue->array = (struct packet *) malloc(MAX_QLEN * sizeof(struct packet));
     
     return queue;
     
@@ -89,8 +90,6 @@ int empty(struct queue *q) {
 
 void display(struct queue *q) {
     
-    if (empty(q)) { printf("\n"); return; }
-    
     int i;
     
     if(q->head < q->tail) {
@@ -110,16 +109,16 @@ void display(struct queue *q) {
     
 }
 
-double exp_random(double mean){
+double exp_random(double lambda){
     
     // generate an exponentially distributed random number
-    // based on the supplied rate ...
+    // based on the supplied average rate ...
     
-    double u;
+    double x;
     
-    u = (double)rand() / (double)RAND_MAX;
+    x = (double)rand() / (double)RAND_MAX;
     
-    return -log(1-u) / mean;
+    return -log(1-x) / lambda;
     
 }
 
@@ -133,20 +132,45 @@ double service_wait(struct packet *p) {
 
 void enqueue(struct queue *q, struct packet *p) {
     
-    struct packet prev = q->len > 0 ? q->array[q->len] : *p;
+    if(full(q)) { q->lost++; return; }
+    
+    // create a reference to the previous packet
+    
+    struct packet prev = q->array[q->tail - 1];
 
+    // arrivals occur in exponential distribution
+    // lambda * exp(-lambda * x)
+    
     p->arrival_time = prev.arrival_time + exp_random(LAMBDA);
+    
+    // service duration is also exponentially distributed
+    
     p->service_duration = exp_random(MU);
+    
+    // service will start at the time of arrival, if idle
+    // or after the previously arriving packet departs, if busy
+    
     p->service_start_time = p->arrival_time > service_end(&prev) ? p->arrival_time : service_end(&prev);
+    
+    // the packet enters the server at the service start time
+    // then leaves the system after the service duration
+    
     p->departure_time = service_end(p);
-    p->wait_duration = p->service_start_time - p->arrival_time;
+
+    // each queue holds a finite capacity of MAX_QLEN
+    // we use a circular array with a head and tail pointer
+    // to track the front and back packets
     
-    q->len++;
-    q->array[q->len] = *p;
+    q->array[q->tail] = *p;
+    q->tail = (q->tail + 1) % q->capacity;
     
-    printf("%s enqueued: %d | arrival_time: %2.6f | service_start_time: %2.6f | service_duration: %2.6f | departure_time: %2.6f | wait_duration: %2.6f | head: %d | tail: %d | lost: %d\n", q->id, p->id, p->arrival_time, p->service_start_time, p->service_duration, p->departure_time, p->wait_duration, q->head, q->tail, q->lost);
+    if(prev.departure_time < p->arrival_time) {
+        q->head = (q->head + 1) % q->capacity;
+    }
     
-    fprintf(f, "%s,%d,%2.6f,%2.6f,%2.6f,%2.6f,%2.6f,%d,%d,%d\n", q->id, p->id, p->arrival_time, p->service_start_time, p->service_duration, p->departure_time, p->wait_duration, q->head, q->tail, q->lost);
+    printf("%s enqueued: %d | arrival_time: %2.6f | departure_time: %2.6f | service_start_time: %2.6f | service_duration: %2.6f | head: %d | tail: %d | lost: %d | queue_position: %d\n", q->id, p->id, p->arrival_time, p->departure_time, p->service_start_time, p->service_duration, q->head, q->tail, q->lost, p->queue_position);
+    
+    fprintf(f, "%s,%d,%2.6f,%2.6f,%2.6f,%2.6f,%d,%d,%d\n", q->id, p->id, p->arrival_time, p->service_start_time, p->service_duration, p->departure_time, q->head, q->tail, q->lost);
     
 }
 
