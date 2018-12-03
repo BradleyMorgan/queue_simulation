@@ -15,11 +15,11 @@
 #include <math.h>
 
 const int MAX_TIME = 1000; // time interval of sample (or number of packets)
-const int MAX_QLEN = 10; // maximum queue length
+const int MAX_QLEN = 9; // maximum queue length
 const int MAX_SERV = 2; // number of servers
 
 const double LAMBDA = 1.0; // intensity, arrival rate (packets per unit time)
-const double MU = 1.0; // service rate (processed packets per unit time)
+const double MU = 2.0; // service rate (processed packets per unit time)
 
 FILE *f;
 
@@ -167,33 +167,84 @@ void enqueue(struct queue *q, struct packet *p) {
     // if the previous packet has already left the system
     // before the current packet arrives...
     
-    if(p->arrival_time > q->array[q->head].departure_time) {
-        q->head = q->tail = (q->head + 1) % q->capacity;
-        q->tail = q->head;
-        q->len--;
-    } else {
-        q->tail = (q->tail + 1) % q->capacity;
-        q->len++;
+    int i;
+    
+    if(q->head == q->tail) {
+        
     }
     
+    for(i=0; i <= q->len; i++) {
+        int index = (i + q->head) % q->capacity;
+        if(p->arrival_time >= q->array[index].departure_time) {
+            q->head = (q->head + 1) % q->capacity;
+            q->len--;
+        }
+    }
     
-    q->array[q->tail] = *p;
+    if(q->len < 10) {
+        q->tail = (q->tail + 1) % q->capacity;
+        q->len++;
+        q->array[q->tail] = *p;
+    } else {
+        q->lost++;
+    }
 
-
-    printf("%s enqueued: %d | arrival_time: %2.6f | departure_time: %2.6f | service_start_time: %2.6f | service_duration: %2.6f | head: %d | tail: %d | len: %d | lost: %d | queue_position: %d\n", q->id, p->id, p->arrival_time, p->departure_time, p->service_start_time, p->service_duration, q->head, q->tail, q->len, q->lost, p->queue_position);
+    printf("%s enqueued: %d | arrival_time: %2.6f | departure_time: %2.6f | service_start_time: %2.6f | service_duration: %2.6f | head: %d | tail: %d | len: %d | lost: %d\n", q->id, p->id, p->arrival_time, p->departure_time, p->service_start_time, p->service_duration, q->head, q->tail, q->len, q->lost);
     
     fprintf(f, "%s,%d,%2.6f,%2.6f,%2.6f,%2.6f,%d,%d,%d\n", q->id, p->id, p->arrival_time, p->service_start_time, p->service_duration, p->departure_time, q->head, q->tail, q->lost);
     
 }
 
+float factorial(float f) {
+    
+    if ( f == 0.0 ) {
+        return 1.0;
+    }
+    
+    float res = f * factorial(f - 1.0);
+    
+    return res;
+}
+
+float calc_bp(float lambda, float mu) {
+    
+    // for an m/m/c/k queue, load is arrival rate divided by the service rate
+    // multiplied by the number of servers ...
+    
+    float load = lambda / mu;
+    
+    //float k = MAX_QUEUE * MAX_SERVERS;
+    
+    float f1 = powf(load, MAX_SERV) / factorial(MAX_SERV);
+    
+    printf("\nload: %3.5f, f1: %3.5f ", load, f1);
+    
+    float f2 = 0.0;
+    
+    int i;
+    
+    for (i = 0; i <= MAX_SERV; i++) {
+        f2 += (powf(load, i) / factorial(i));
+    }
+    
+    float f3 = f1 / f2;
+    
+    printf(" f2: %3.5f, f3: %3.5f\n", f2, f3);
+    
+    return f3;
+    
+}
+
 int main(void) {
+    
+    calc_bp(LAMBDA, MU);
     
     f = fopen("out.csv", "w");
     
     fprintf(f, "queue,packet,arrival_time,service_start_time,service_duration,departure_time,wait_duration,head,tail,lost\n");
     
     struct queue *q1 = init_queue(MAX_QLEN, "q1");
-//    struct queue *q2 = init_queue(MAX_QLEN, "q2");
+    struct queue *q2 = init_queue(MAX_QLEN, "q2");
     
     int t;
     
@@ -201,18 +252,18 @@ int main(void) {
         
         struct packet *p = init_packet(t);
         
-//        int random_packet = rand() % MAX_SERV;
-//
-//        if(random_packet == 0) {
-//
+        int random_packet = rand() % MAX_SERV;
+
+        if(random_packet == 0) {
+
             enqueue(q1, p);
-            
-//        } else {
-//
-//            enqueue(q2, p);
-//
-//        }
-//
+        
+        } else {
+
+            enqueue(q2, p);
+
+        }
+
     }
     
     return 0;
