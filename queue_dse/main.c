@@ -19,7 +19,7 @@ const int MAX_QLEN = 10; // maximum queue length
 const int MAX_SERV = 2; // number of servers
 
 const double LAMBDA = 1.0; // intensity, arrival rate (packets per unit time)
-const double MU = 1.25; // service rate (processed packets per unit time)
+const double MU = 0.5; // service rate (processed packets per unit time)
 
 FILE *f;
 
@@ -50,13 +50,14 @@ struct queue {
     
 };
 
-struct queue *init_queue(unsigned int capacity, char *qid) {
+struct queue *init_queue(char *qid) {
     
     struct queue *queue = (struct queue *) malloc(sizeof(struct queue));
     
     queue->id = qid;
-    queue->capacity = capacity;
-    queue->len = queue->lost = 0;
+    queue->capacity = MAX_QLEN;
+    queue->len =  1;
+    queue->lost = 0;
     queue->head = 0;
     queue->tail = 1;
     
@@ -136,20 +137,24 @@ double service_wait(struct packet *p) {
 
 void enqueue(struct queue *q, struct packet *p) {
     
-    //if(full(q)) { q->lost++; return; }
-    
+
     // create a reference to the previous packet
     
     struct packet prev = q->array[q->tail];
-    
-    if(q->head == q->tail) {
-        prev = q->array[q->capacity];
-    }
 
     // arrivals occur in exponential distribution
     // lambda * exp(-lambda * x)
     
-    p->arrival_time = prev.arrival_time + exp_random(LAMBDA);
+    // if the queue is full, we cannot use only the previous arrival time
+    // as a reference, because the tail is not advanced when the
+    // queue is at capacity, so we use
+    
+    if(q->head == q->tail + 1 || (q->head == 0 && q->tail == 9)) {
+        p->arrival_time = q->array[q->head].arrival_time + (exp_random(LAMBDA) * q->len);
+        q->lost++;
+    } else {
+        p->arrival_time = prev.arrival_time + exp_random(LAMBDA);
+    }
     
     // service duration is also exponentially distributed
     
@@ -181,12 +186,10 @@ void enqueue(struct queue *q, struct packet *p) {
         }
     }
 
-    if(q->len < q->capacity) {
+    if(q->head != q->tail + 1 && !(q->head == 0 && q->tail == 9)) {
         q->tail = (q->tail + 1) % q->capacity;
         q->len++;
         q->array[q->tail] = *p;
-    } else {
-        q->lost++;
     }
 
     printf("%s enqueued: %d | arrival_time: %2.6f | departure_time: %2.6f | service_start_time: %2.6f | service_duration: %2.6f | head: %d | tail: %d | len: %d | lost: %d\n", q->id, p->id, p->arrival_time, p->departure_time, p->service_start_time, p->service_duration, q->head, q->tail, q->len, q->lost);
@@ -208,29 +211,16 @@ float factorial(float f) {
 
 double calc_bp(double lambda, double mu) {
     
-    // for an m/m/c/k queue, load is arrival rate divided by the service rate
+    // for an m/m/1/k queue, load is arrival rate divided by the service rate
     // multiplied by the number of servers ...
     
     double load = lambda / mu;
     
-    //float k = MAX_QUEUE * MAX_SERVERS;
-    
     double f1 = (1-load) * pow(load, MAX_QLEN);
-    
-    //float f1 = powf(load, MAX_SERV) / factorial(MAX_SERV);
     
     printf("\nload: %3.5f, f1: %3.5f ", load, f1);
     
-    //float f2 = 0.0;
-
     double f2 = 1 - pow(load, MAX_QLEN+1);
-    
-//    int i;
-//
-//    for (i = 0; i <= MAX_SERV; i++) {
-//        f2 += (powf(load, i) / factorial(i));
-//    }
-    
     double f3 = f1 / f2;
     
     printf(" f2: %3.5f, f3: %3.5f\n", f2, f3);
@@ -247,8 +237,8 @@ int main(void) {
     
     fprintf(f, "queue,packet,arrival_time,service_start_time,service_duration,departure_time,wait_duration,head,tail,lost\n");
     
-    struct queue *q1 = init_queue(MAX_QLEN, "q1");
-    struct queue *q2 = init_queue(MAX_QLEN, "q2");
+    struct queue *q1 = init_queue("q1");
+    struct queue *q2 = init_queue("q2");
     
     int t;
     
@@ -256,17 +246,17 @@ int main(void) {
         
         struct packet *p = init_packet(t);
         
-//        int random_packet = rand() % MAX_SERV;
-//
-//        if(random_packet == 0) {
+        int random_packet = rand() % MAX_SERV;
+
+        if(random_packet == 0) {
 
             enqueue(q1, p);
         
-//        } else {
-//
-//            enqueue(q2, p);
-//
-//        }
+        } else {
+
+            enqueue(q2, p);
+
+        }
 
     }
     
