@@ -13,27 +13,26 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 
-const int MAX_TIME = 1000; // time interval of sample (or number of packets)
+const int MAX_TIME = 10000; // time interval of sample (or number of packets)
 const int MAX_QLEN = 10; // maximum queue length
 const int MAX_SERV = 2; // number of servers
 
 const double LAMBDA = 1.0; // intensity, arrival rate (packets per unit time)
-const double MU = 0.5; // service rate (processed packets per unit time)
+const double MU = 1.2; // service rate (processed packets per unit time)
 
 FILE *f;
 
 struct packet {
     
     int id;
-    int queue_position;
     
     double arrival_time;
     double departure_time;
     double service_start_time;
     double service_duration;
     double wait_duration;
-    double wait_overlap;
     
 };
 
@@ -44,7 +43,8 @@ struct queue {
     int head, tail;
     int len, capacity, lost;
     
-    double wait;
+    double total_wait_duration;
+    double total_len;
     
     struct packet *array;
     
@@ -137,17 +137,18 @@ double service_wait(struct packet *p) {
 
 void enqueue(struct queue *q, struct packet *p) {
     
-
     // create a reference to the previous packet
     
     struct packet prev = q->array[q->tail];
 
-    // arrivals occur in exponential distribution
-    // lambda * exp(-lambda * x)
-    
     // if the queue is full, we cannot use only the previous arrival time
     // as a reference, because the tail is not advanced when the
-    // queue is at capacity, so we use
+    // queue is at capacity, so we use the arrival time of the first
+    // packet and add a random exponential value for each packet in the
+    // queue to approximate the arrival time of a previously dropped packet
+
+    // arrivals occur in exponential distribution
+    // lambda * exp(-lambda * x)
     
     if(q->head == q->tail + 1 || (q->head == 0 && q->tail == 9)) {
         p->arrival_time = q->array[q->head].arrival_time + (exp_random(LAMBDA) * q->len);
@@ -155,6 +156,8 @@ void enqueue(struct queue *q, struct packet *p) {
     } else {
         p->arrival_time = prev.arrival_time + exp_random(LAMBDA);
     }
+    
+    q->total_len += q->len;
     
     // service duration is also exponentially distributed
     
@@ -169,7 +172,11 @@ void enqueue(struct queue *q, struct packet *p) {
     // then leaves the system after the service duration
     
     p->departure_time = service_end(p);
-
+    
+    // a packet is in the queue until the moment of service
+    
+    p->wait_duration = p->departure_time - p->arrival_time;
+    
     // each queue holds a finite capacity of MAX_QLEN
     // we use a circular array with a head and tail pointer
     // to track the front and back packets
@@ -190,9 +197,11 @@ void enqueue(struct queue *q, struct packet *p) {
         q->tail = (q->tail + 1) % q->capacity;
         q->len++;
         q->array[q->tail] = *p;
+        q->total_wait_duration += p->wait_duration;
+        
     }
 
-    printf("%s enqueued: %d | arrival_time: %2.6f | departure_time: %2.6f | service_start_time: %2.6f | service_duration: %2.6f | head: %d | tail: %d | len: %d | lost: %d\n", q->id, p->id, p->arrival_time, p->departure_time, p->service_start_time, p->service_duration, q->head, q->tail, q->len, q->lost);
+    //printf("%s enqueued: %d | arrival_time: %2.6f | departure_time: %2.6f | service_start_time: %2.6f | service_duration: %2.6f | head: %d | tail: %d | len: %d | lost: %d\n", q->id, p->id, p->arrival_time, p->departure_time, p->service_start_time, p->service_duration, q->head, q->tail, q->len, q->lost);
     
     fprintf(f, "%s,%d,%2.6f,%2.6f,%2.6f,%2.6f,%d,%d,%d\n", q->id, p->id, p->arrival_time, p->service_start_time, p->service_duration, p->departure_time, q->head, q->tail, q->lost);
     
@@ -217,47 +226,83 @@ double calc_bp(double lambda, double mu) {
     double load = lambda / mu;
     
     double f1 = (1-load) * pow(load, MAX_QLEN);
-    
-    printf("\nload: %3.5f, f1: %3.5f ", load, f1);
-    
     double f2 = 1 - pow(load, MAX_QLEN+1);
     double f3 = f1 / f2;
-    
-    printf(" f2: %3.5f, f3: %3.5f\n", f2, f3);
     
     return f3;
     
 }
 
-int main(void) {
+double calc_qlen(double lambda, double mu) {
     
-    calc_bp(LAMBDA, MU);
+    double load = lambda / mu;
+    
+    double f1 = load / (1 - load);
+    double f2 = (MAX_QLEN + 1) * pow(load, MAX_QLEN+1);
+    double f3 = 1 - pow(load, MAX_QLEN+1);
+    
+    double f4 = f2 / f3;
+    double f5 = f1 - f4;
+    
+    return f5;
+    
+}
+
+double calc_wait(double lambda, double mu) {
+    
+    double load = lambda / mu;
+    
+    double f1 = calc_qlen(LAMBDA, MU);
+    double f2 = (1-load) * pow(load, MAX_QLEN);
+    double f3 = 1 - pow(load, MAX_QLEN+1);
+    double f4 = f2 / f3;
+    double f5 = 1 - f4;
+    double f6 = lambda * f5;
+    double f7 = f1 / f6;
+    
+    return f7;
+    
+}
+
+int main(void) {
     
     f = fopen("out.csv", "w");
     
     fprintf(f, "queue,packet,arrival_time,service_start_time,service_duration,departure_time,wait_duration,head,tail,lost\n");
     
-    struct queue *q1 = init_queue("q1");
-    struct queue *q2 = init_queue("q2");
+    int i, t;
     
-    int t;
+    for(i=0; i<=9; i++) {
     
-    for(t = 0; t <= MAX_TIME; t++) {
+        srand(i);
         
-        struct packet *p = init_packet(t);
+        struct queue *q1 = init_queue("q1");
+        struct queue *q2 = init_queue("q2");
         
-        int random_packet = rand() % MAX_SERV;
+        for(t = 0; t <= MAX_TIME; t++) {
+            
+            struct packet *p = init_packet(t);
+            
+            int random_packet = rand() % MAX_SERV;
 
-        if(random_packet == 0) {
+            if(random_packet == 0) {
 
-            enqueue(q1, p);
-        
-        } else {
+                enqueue(q1, p);
+            
+            } else {
 
-            enqueue(q2, p);
+                enqueue(q2, p);
+
+            }
 
         }
-
+        
+        double bp = ((q1->lost + q2->lost) / (double)MAX_TIME);
+        double w = (q1->total_wait_duration + q2->total_wait_duration) / (double)MAX_TIME;
+        double slen = (q1->total_len + q2->total_len) / (double)MAX_TIME;
+        
+        printf("tblock: %3.6f, sblock: %3.6f, tlen: %3.5f, slen: %3.5f, tw: %3.6f, sw: %3.6f\n", calc_bp(LAMBDA, MU), bp, calc_qlen(LAMBDA, MU), slen, calc_wait(LAMBDA, MU), w);
+        
     }
     
     return 0;
