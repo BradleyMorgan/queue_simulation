@@ -15,11 +15,11 @@
 #include <math.h>
 
 const int MAX_TIME = 1000; // time interval of sample (or number of packets)
-const int MAX_QLEN = 9; // maximum queue length
+const int MAX_QLEN = 10; // maximum queue length
 const int MAX_SERV = 2; // number of servers
 
 const double LAMBDA = 1.0; // intensity, arrival rate (packets per unit time)
-const double MU = 2.0; // service rate (processed packets per unit time)
+const double MU = 1.25; // service rate (processed packets per unit time)
 
 FILE *f;
 
@@ -57,7 +57,8 @@ struct queue *init_queue(unsigned int capacity, char *qid) {
     queue->id = qid;
     queue->capacity = capacity;
     queue->len = queue->lost = 0;
-    queue->head = queue->tail = 0;
+    queue->head = 0;
+    queue->tail = 1;
     
     queue->array = (struct packet *) malloc(MAX_QLEN * sizeof(struct packet));
     
@@ -71,6 +72,9 @@ struct packet *init_packet(int id) {
     
     p->id = id;
     p->arrival_time = 0.0;
+    p->departure_time = 0.0;
+    p->service_start_time = 0.0;
+    p->service_duration = 0.0;
     
     return p;
     
@@ -118,7 +122,7 @@ double exp_random(double lambda){
     
     x = (double)rand() / (double)RAND_MAX;
     
-    return -log(1-x) / lambda;
+    return -log(x) / lambda;
     
 }
 
@@ -137,6 +141,10 @@ void enqueue(struct queue *q, struct packet *p) {
     // create a reference to the previous packet
     
     struct packet prev = q->array[q->tail];
+    
+    if(q->head == q->tail) {
+        prev = q->array[q->capacity];
+    }
 
     // arrivals occur in exponential distribution
     // lambda * exp(-lambda * x)
@@ -163,15 +171,7 @@ void enqueue(struct queue *q, struct packet *p) {
 
     // [1.0][1.4][1.6][1.5][1.8][1.12][1.9][1.9][1.10][1.11]
     
-    
-    // if the previous packet has already left the system
-    // before the current packet arrives...
-    
     int i;
-    
-    if(q->head == q->tail) {
-        
-    }
     
     for(i=0; i <= q->len; i++) {
         int index = (i + q->head) % q->capacity;
@@ -180,8 +180,8 @@ void enqueue(struct queue *q, struct packet *p) {
             q->len--;
         }
     }
-    
-    if(q->len < 10) {
+
+    if(q->len < q->capacity) {
         q->tail = (q->tail + 1) % q->capacity;
         q->len++;
         q->array[q->tail] = *p;
@@ -206,28 +206,32 @@ float factorial(float f) {
     return res;
 }
 
-float calc_bp(float lambda, float mu) {
+double calc_bp(double lambda, double mu) {
     
     // for an m/m/c/k queue, load is arrival rate divided by the service rate
     // multiplied by the number of servers ...
     
-    float load = lambda / mu;
+    double load = lambda / mu;
     
     //float k = MAX_QUEUE * MAX_SERVERS;
     
-    float f1 = powf(load, MAX_SERV) / factorial(MAX_SERV);
+    double f1 = (1-load) * pow(load, MAX_QLEN);
+    
+    //float f1 = powf(load, MAX_SERV) / factorial(MAX_SERV);
     
     printf("\nload: %3.5f, f1: %3.5f ", load, f1);
     
-    float f2 = 0.0;
+    //float f2 = 0.0;
+
+    double f2 = 1 - pow(load, MAX_QLEN+1);
     
-    int i;
+//    int i;
+//
+//    for (i = 0; i <= MAX_SERV; i++) {
+//        f2 += (powf(load, i) / factorial(i));
+//    }
     
-    for (i = 0; i <= MAX_SERV; i++) {
-        f2 += (powf(load, i) / factorial(i));
-    }
-    
-    float f3 = f1 / f2;
+    double f3 = f1 / f2;
     
     printf(" f2: %3.5f, f3: %3.5f\n", f2, f3);
     
@@ -252,17 +256,17 @@ int main(void) {
         
         struct packet *p = init_packet(t);
         
-        int random_packet = rand() % MAX_SERV;
-
-        if(random_packet == 0) {
+//        int random_packet = rand() % MAX_SERV;
+//
+//        if(random_packet == 0) {
 
             enqueue(q1, p);
         
-        } else {
-
-            enqueue(q2, p);
-
-        }
+//        } else {
+//
+//            enqueue(q2, p);
+//
+//        }
 
     }
     
