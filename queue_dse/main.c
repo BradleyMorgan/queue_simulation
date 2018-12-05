@@ -6,8 +6,11 @@
 //  Copyright © 2018 BiT8. All rights reserved.
 //
 //  This program uses discrete event simulation (a.k.a. event driven simulation)
-//  to measure the performance of a M/M/2/10 poisson system.
+//  to measure the performance of a two queue m/m/1 poisson system.
 //
+//  departure<-[head][*][*][*][tail]<-arrival
+//
+//  
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,12 +21,17 @@
 const int MAX_TIME = 10000; // time interval of sample (or number of packets)
 const int MAX_QLEN = 10; // maximum queue length
 const int MAX_SERV = 2; // number of servers
+const int MAX_ITER = 50;
 
-const double LAMBDA = 1.0; // intensity, arrival rate (packets per unit time)
-const double MU = 1.1; // service rate (processed packets per unit time)
+const double LAMBDA = 1.0; // base intensity, arrival rate (packets per unit time)
+const double MU = 1.1; // base service rate (processed packets per unit time)
 
 FILE *out1;
 FILE *out2;
+FILE *out3;
+
+//  create an arrival (packet) data structure
+//  and a queue data structure holding an array of these arrivals
 
 struct packet {
     
@@ -36,6 +44,11 @@ struct packet {
     double wait_duration;
     
 };
+
+//  simulate the finite queue using a circular array
+//  data structure to track arrivals and departures, i.e...
+//
+//  departure<-[head][*][*][*][tail]<-arrival
 
 struct queue {
     
@@ -157,8 +170,8 @@ void enqueue(struct queue *q, struct packet *p) {
     // arrivals occur in exponential distribution
     // lambda * exp(-lambda * x)
     
-    if(q->head == q->tail + 1 || (q->head == 0 && q->tail == 9)) {
-        p->arrival_time = q->array[q->head].arrival_time + (exp_random(q->lambda) * q->capacity);
+    if(q->head == q->tail + 1 || (q->head == 0 && q->tail == MAX_QLEN - 1)) {
+        p->arrival_time = q->array[q->head].arrival_time + (exp_random(q->lambda) * (q->capacity));
         q->lost++;
     } else {
         p->arrival_time = prev.arrival_time + exp_random(q->lambda);
@@ -273,8 +286,11 @@ double calc_wait(struct queue *q) {
 
 int main(void) {
     
+    srand((unsigned int)time(NULL));
+    
     out1 = fopen("sim.csv", "w");
     out2 = fopen("perf.csv", "w");
+    out3 = fopen("avg.csv", "w");
     
     fprintf(out1, "queue,packet,arrival_time,service_start_time,service_duration,departure_time,head,tail,lost\n");
     fprintf(out2, "seed,λ,μ,ρ,tbp,sbp,tavglen,savglen,tavgwait,savgwait\n");
@@ -286,12 +302,17 @@ int main(void) {
     
     for(i=MU; i<=2.0; i+=0.1) {
     
-        for(j=0; j<=9; j++) {
+        double tbp = 0.0;
+        double tw = 0.0;
+        double tslen = 0.0;
         
-            srand(j);
+        struct queue *q1;
+        struct queue *q2;
+        
+        for(j=0; j<=MAX_ITER - 1; j++) {
             
-            struct queue *q1 = init_queue("q1");
-            struct queue *q2 = init_queue("q2");
+            q1 = init_queue("q1");
+            q2 = init_queue("q2");
             
             q1->mu = i;
             q2->mu = i;
@@ -322,7 +343,17 @@ int main(void) {
             
             printf("%d,%2.2f,%2.2f,%3.6f,%3.6f,%3.6f,%3.5f,%3.5f,%3.6f,%3.6f\n", j, q1->lambda, q1->mu, q1->lambda / q1->mu, calc_bp(q1), bp, calc_qlen(q1), slen, calc_wait(q1), w);
             
+            tbp += bp;
+            tw += w;
+            tslen += slen;
+            
         }
+        
+        printf("-----------------------------\n");
+        
+        fprintf(out2, "%d,%2.2f,%2.2f,%3.6f,%3.6f,%3.6f,%3.6f,%3.6f,%3.6f,%3.6f\n", j, q1->lambda, q1->mu, q1->lambda / q1->mu, calc_bp(q1), tbp / MAX_ITER, calc_qlen(q1), tslen / MAX_ITER, calc_wait(q1), tw / MAX_ITER);
+        
+        printf("%d,%2.2f,%2.2f,%3.6f,%3.6f,%3.6f,%3.5f,%3.5f,%3.6f,%3.6f\n", j, q1->lambda, q1->mu, q1->lambda / q1->mu, calc_bp(q1), tbp / MAX_ITER, calc_qlen(q1), tslen / MAX_ITER, calc_wait(q1), tw / MAX_ITER);
         
         printf("-----------------------------\n");
         
