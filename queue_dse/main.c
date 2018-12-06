@@ -314,6 +314,7 @@
             QUE_DISC = atoi(argv[3]);
             QUE_PARM = atof(argv[4]);
             QUE_PMAX = atof(argv[5]);
+            QUE_PMIN = QUE_DISC == 0 ? LAMBDA : MU;
         }
         
         printf("λ=%2.4f\nμ=%2.4f\nassignment strategy=%d\nvariable parameter=%d\nrange max=%2.4f\n\n--------- BEGIN SIMULATION ---------\n\n", LAMBDA, MU, QUE_DISC, QUE_PARM, QUE_PMAX);
