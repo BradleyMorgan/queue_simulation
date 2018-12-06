@@ -69,6 +69,8 @@ struct queue {
     
     struct packet *array;
     
+    double t;
+    
 };
 
 struct queue *init_queue(char *qid, int parameter, double value) {
@@ -78,14 +80,19 @@ struct queue *init_queue(char *qid, int parameter, double value) {
     queue->id = qid;
     queue->capacity = MAX_QLEN;
     
+    queue->t = 0.0;
     queue->lambda = parameter == 0 ? value : LAMBDA;
     queue->mu = parameter == 1 ? value : MU;
-    queue->load = parameter == 2 ? value : LAMBDA / MU;
+    //queue->load = parameter == 2 ? value : queue->lambda / (2 * queue->mu);
+    queue->load = parameter == 2 ? value : queue->lambda / queue->mu;
     
     queue->head = 0;
     queue->tail = 1;
     queue->len =  1;
     queue->lost = 0;
+    
+    queue->total_wait_duration = 0.0;
+    queue->total_len = 0.0;
     
     queue->array = (struct packet *) malloc(MAX_QLEN * sizeof(struct packet));
     
@@ -178,12 +185,11 @@ void enqueue(struct queue *q, struct packet *p) {
     // arrivals occur in exponential distribution
     // lambda * exp(-lambda * x)
     
-    if(q->head == q->tail + 1 || (q->head == 0 && q->tail == MAX_QLEN - 1)) {
-        p->arrival_time = q->array[q->head].arrival_time + (exp_random(q->lambda) * (q->capacity));
-        q->lost++;
-    } else {
-        p->arrival_time = prev.arrival_time + exp_random(q->lambda);
-    }
+    //if(q->head == q->tail + 1 || (q->head == 0 && q->tail == (q->capacity - 1))) {
+    //   p->arrival_time = q->array[q->head].arrival_time + exp_random(q->lambda) * q->capacity;
+    //} else {
+    p->arrival_time = q->t + exp_random(q->lambda);
+    //}
     
     q->total_len += q->len;
     
@@ -221,7 +227,7 @@ void enqueue(struct queue *q, struct packet *p) {
         }
     }
 
-    if(q->head != q->tail + 1 && !(q->head == 0 && q->tail == 9)) {
+    if(q->head != q->tail + 1 && !(q->head == 0 && q->tail == q->capacity - 1)) {
         q->tail = (q->tail + 1) % q->capacity;
         q->len++;
         q->array[q->tail] = *p;
@@ -230,6 +236,8 @@ void enqueue(struct queue *q, struct packet *p) {
         q->lost++;
     }
 
+    q->t = p->arrival_time;
+    
     //printf("%s enqueued: %d | arrival_time: %2.6f | departure_time: %2.6f | service_start_time: %2.6f | service_duration: %2.6f | head: %d | tail: %d | len: %d | lost: %d\n", q->id, p->id, p->arrival_time, p->departure_time, p->service_start_time, p->service_duration, q->head, q->tail, q->len, q->lost);
     
     fprintf(out1, "%s,%d,%2.6f,%2.6f,%2.6f,%2.6f,%d,%d,%d\n", q->id, p->id, p->arrival_time, p->service_start_time, p->service_duration, p->departure_time, q->head, q->tail, q->lost);
@@ -252,10 +260,8 @@ double calc_bp(struct queue *q) {
     // for an m/m/1/k queue, load is arrival rate divided by the service rate
     // multiplied by the number of servers ...
     
-    double load = q->lambda / q->mu;
-    
-    double f1 = (1-load) * pow(load, MAX_QLEN);
-    double f2 = 1 - pow(load, MAX_QLEN+1);
+    double f1 = (1-q->load) * pow(q->load, MAX_QLEN);
+    double f2 = 1 - pow(q->load, MAX_QLEN+1);
     double f3 = f1 / f2;
     
     return f3;
@@ -263,12 +269,10 @@ double calc_bp(struct queue *q) {
 }
 
 double calc_qlen(struct queue *q) {
-    
-    double load = q->lambda / q->mu;
-    
-    double f1 = load / (1 - load);
-    double f2 = (MAX_QLEN + 1) * pow(load, MAX_QLEN+1);
-    double f3 = 1 - pow(load, MAX_QLEN+1);
+
+    double f1 = q->load / (1 - q->load);
+    double f2 = (MAX_QLEN + 1) * pow(q->load, MAX_QLEN + 1);
+    double f3 = 1 - pow(q->load, MAX_QLEN+1);
     
     double f4 = f2 / f3;
     double f5 = f1 - f4;
@@ -278,12 +282,10 @@ double calc_qlen(struct queue *q) {
 }
 
 double calc_wait(struct queue *q) {
-    
-    double load = q->lambda / q->mu;
-    
+
     double f1 = calc_qlen(q);
-    double f2 = (1-load) * pow(load, MAX_QLEN);
-    double f3 = 1 - pow(load, MAX_QLEN+1);
+    double f2 = (1-q->load) * pow(q->load, MAX_QLEN);
+    double f3 = 1 - pow(q->load, MAX_QLEN+1);
     double f4 = f2 / f3;
     double f5 = 1 - f4;
     double f6 = q->lambda * f5;
@@ -331,35 +333,28 @@ int main(void) {
     
                     int random_packet = rand() % MAX_SERV;
 
-                    if(random_packet == 0) {
-
-                        enqueue(q1, p);
-                    
-                    } else {
-
-                        enqueue(q2, p);
-
-                    }
+                    if(random_packet == 0) { enqueue(q1, p); } else { enqueue(q2, p); }
                     
                 } else {
                     
+                    int random_packet = rand() % MAX_SERV;
+                    
                     if(q1->len < q2->len) {
-                        
                         enqueue(q1, p);
-                        
-                    } else {
-                        
+                    } else if(q2->len < q1->len) {
                         enqueue(q2, p);
-                        
+                    } else {
+                        if(random_packet == 0) { enqueue(q1, p); } else { enqueue(q2, p); }
                     }
+                        
                     
                 }
 
             }
             
             double bp = ((q1->lost + q2->lost) / (double)MAX_TIME);
-            double w = (q1->total_wait_duration + q2->total_wait_duration) / (double)MAX_TIME;
             double slen = (q1->total_len + q2->total_len) / (double)MAX_TIME;
+            double w = (q1->total_wait_duration + q2->total_wait_duration) / (double)MAX_TIME;
             
             fprintf(out2, "%d,%2.2f,%2.2f,%3.6f,%3.6f,%3.6f,%3.6f,%3.6f,%3.6f,%3.6f\n", j, q1->lambda, q1->mu, q1->lambda / q1->mu, calc_bp(q1), bp, calc_qlen(q1), slen, calc_wait(q1), w);
             
@@ -373,9 +368,9 @@ int main(void) {
         
         printf("-----------------------------\n");
         
-        fprintf(out3, "%d,%2.2f,%2.2f,%3.6f,%3.6f,%3.6f,%3.6f,%3.6f,%3.6f,%3.6f\n", j, q1->lambda, q1->mu, q1->lambda / q1->mu, calc_bp(q1), tbp / MAX_ITER, calc_qlen(q1), tslen / MAX_ITER, calc_wait(q1), tw / MAX_ITER);
+        fprintf(out3, "%d,%2.2f,%2.2f,%3.6f,%3.6f,%3.6f,%3.6f,%3.6f,%3.6f,%3.6f\n", j, q1->lambda, q1->mu, q1->load, calc_bp(q1), tbp / MAX_ITER, calc_qlen(q1), tslen / MAX_ITER, calc_wait(q1), tw / MAX_ITER);
         
-        printf("%d,%2.2f,%2.2f,%3.6f,%3.6f,%3.6f,%3.5f,%3.5f,%3.6f,%3.6f\n", j, q1->lambda, q1->mu, q1->lambda / q1->mu, calc_bp(q1), tbp / MAX_ITER, calc_qlen(q1), tslen / MAX_ITER, calc_wait(q1), tw / MAX_ITER);
+        printf("%d,%2.2f,%2.2f,%3.6f,%3.6f,%3.6f,%3.5f,%3.5f,%3.6f,%3.6f\n", j, q1->lambda, q1->mu, q1->load, calc_bp(q1), tbp / MAX_ITER, calc_qlen(q1), tslen / MAX_ITER, calc_wait(q1), tw / MAX_ITER);
         
         printf("-----------------------------\n");
         
