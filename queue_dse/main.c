@@ -214,7 +214,7 @@
         
         int i;
         
-        for(i=0; i <= q->len; i++) {
+        for(i=0; i <= q->len + 1; i++) {
             int index = (i + q->head) % q->capacity;
             if(p->arrival_time >= q->array[index].departure_time) {
                 q->head = (q->head + 1) % q->capacity;
