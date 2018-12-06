@@ -21,7 +21,7 @@
     const int MAX_TIME = 10000; // time interval of sample (or number of packets)
     const int MAX_QLEN = 10; // maximum queue length
     const int MAX_SERV = 2; // number of servers
-    const int MAX_ITER = 50; // number of samples, simulation runs
+    const int MAX_ITER = 20; // number of samples, simulation runs
 
     int QUE_DISC = 1; // 0 for random, 1 for min
     int QUE_PARM = 1; // 0 for lambda, 1 for mu, 2 for load
