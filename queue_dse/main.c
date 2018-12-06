@@ -324,7 +324,12 @@
         out1 = fopen("sim.csv", "w");
         out2 = fopen("perf.csv", "w");
         
-        out3 = QUE_DISC == 0 ? fopen("rnd_avg.csv", "w") : fopen("min_avg.csv", "w");
+        char *fname1;
+        asprintf(&fname1, "rnd_avg_%d.csv", QUE_PARM);
+        char *fname2;
+        asprintf(&fname2, "rnd_min_%d.csv", QUE_PARM);
+        
+        out3 = QUE_DISC == 0 ? fopen(fname1, "w") : fopen(fname2, "w");
         
         fprintf(out1, "queue,packet,arrival_time,service_start_time,service_duration,departure_time,head,tail,lost\n");
         fprintf(out2, "seed,λ,μ,ρ,sbp,savglen,tavgwait,savgwait\n");
