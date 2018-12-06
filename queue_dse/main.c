@@ -21,8 +21,8 @@
     const int MAX_TIME = 10000; // time interval of sample (or number of packets)
     const int MAX_QLEN = 10; // maximum queue length
     const int MAX_SERV = 2; // number of servers
-    const int MAX_ITER = 20; // number of samples, simulation runs
 
+    int MAX_ITER = 20; // number of samples, simulation runs
     int QUE_DISC = 1; // 0 for random, 1 for min
     int QUE_PARM = 1; // 0 for lambda, 1 for mu, 2 for load
 
@@ -305,8 +305,8 @@
 
     int main(int argc, char *argv[]) {
         
-        if( argc != 6 ) {
-            printf("USAGE: \nλ: intensity or arrival rate (i.e. 1.0)\nμ: service rate (i.e. 1.1)\nassignment strategy (0=random,1=min)\nvariable parameter (0=lambda,1=mu)\nrange max: (i.e. 3.0)\n\n");
+        if( argc != 7 ) {
+            printf("USAGE: \nλ: intensity or arrival rate (i.e. 1.0)\nμ: service rate (i.e. 1.1)\nassignment strategy: (0=random,1=min)\nvariable parameter: (0=lambda,1=mu)\nrange max: (i.e. 3.0)\niterations: number of times to run each simulation\n\n");
             printf("WARNING: Using default values\n");
         } else {
             LAMBDA = atof(argv[1]);
@@ -315,6 +315,7 @@
             QUE_PARM = atof(argv[4]);
             QUE_PMAX = atof(argv[5]);
             QUE_PMIN = QUE_PARM == 0 ? LAMBDA : MU;
+            MAX_ITER = atoi(argv[6]);
         }
         
         printf("λ=%2.4f\nμ=%2.4f\nassignment strategy=%d\nvariable parameter=%d\nrange max=%2.4f\n\n--------- BEGIN SIMULATION ---------\n\n", LAMBDA, MU, QUE_DISC, QUE_PARM, QUE_PMAX);
