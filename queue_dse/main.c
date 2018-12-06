@@ -26,8 +26,8 @@
     int QUE_DISC = 1; // 0 for random, 1 for min
     int QUE_PARM = 1; // 0 for lambda, 1 for mu, 2 for load
 
-    double QUE_PMIN = 1.1; // minimum value of chosen parameter above
-    double QUE_PMAX = 3.0; // maximum value of chosen parameter above
+    double QUE_PMIN = 1.4; // minimum value of chosen parameter above
+    double QUE_PMAX = 2.5; // maximum value of chosen parameter above
     double QUE_INCR = 0.1; // increment parameter by this value each iteration
 
     double LAMBDA = 1.0; // base intensity, arrival rate (packets per unit time)
@@ -142,13 +142,11 @@
         // generate an exponentially distributed random number
         // based on the supplied average rate ...
         
-        double x, r;
+        double x;
         
         x = (double)rand() / (double)RAND_MAX;
         
-        r = -log(x) / lambda;
-        
-        return r;
+        return -log(1-x) / lambda;
         
     }
 
@@ -366,14 +364,10 @@
                         
                     } else {
                         
-                        int random_packet = rand() % MAX_SERV;
-                        
-                        if(q1->len < q2->len) {
+                        if(q1->len <= q2->len) {
                             enqueue(q1, p);
-                        } else if(q2->len < q1->len) {
+                        } else  {
                             enqueue(q2, p);
-                        } else {
-                            if(random_packet == 0) { enqueue(q1, p); } else { enqueue(q2, p); }
                         }
                         
                     }
