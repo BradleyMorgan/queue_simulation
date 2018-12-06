@@ -327,7 +327,7 @@
         char *fname1;
         asprintf(&fname1, "rnd_avg_%d.csv", QUE_PARM);
         char *fname2;
-        asprintf(&fname2, "rnd_min_%d.csv", QUE_PARM);
+        asprintf(&fname2, "min_avg_%d.csv", QUE_PARM);
         
         out3 = QUE_DISC == 0 ? fopen(fname1, "w") : fopen(fname2, "w");
         
