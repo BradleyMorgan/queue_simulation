@@ -303,7 +303,7 @@
 
     int main(int argc, char *argv[]) {
         
-        if( argc != 7 ) {
+        if( argc != 8 ) {
             printf("USAGE: \nλ: intensity or arrival rate (i.e. 1.0)\nμ: service rate (i.e. 1.1)\nassignment strategy: (0=random,1=min)\nvariable parameter: (0=lambda,1=mu)\nrange max: (i.e. 3.0)\niterations: number of times to run each simulation\nparameter increment: (i.e. 0.1)\n\n");
             printf("WARNING: Using default values\n");
         } else {
