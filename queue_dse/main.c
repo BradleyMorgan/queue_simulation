@@ -22,8 +22,12 @@ const int MAX_TIME = 10000; // time interval of sample (or number of packets)
 const int MAX_QLEN = 10; // maximum queue length
 const int MAX_SERV = 2; // number of servers
 const int MAX_ITER = 20;
-const int QUE_DISC = 1; // 0 for random, 1 for min
+const int QUE_DISC = 0; // 0 for random, 1 for min
+const int QUE_PARM = 1;
 
+const double QUE_PMIN = 0.5;
+const double QUE_PMAX = 3.0;
+const double QUE_INCR = 0.1;
 const double LAMBDA = 1.0; // base intensity, arrival rate (packets per unit time)
 const double MU = 1.1; // base service rate (processed packets per unit time)
 
@@ -67,15 +71,16 @@ struct queue {
     
 };
 
-struct queue *init_queue(char *qid) {
+struct queue *init_queue(char *qid, int parameter, double value) {
     
     struct queue *queue = (struct queue *) malloc(sizeof(struct queue));
     
     queue->id = qid;
     queue->capacity = MAX_QLEN;
     
-    queue->lambda = LAMBDA;
-    queue->mu = MU;
+    queue->lambda = parameter == 0 ? value : LAMBDA;
+    queue->mu = parameter == 1 ? value : MU;
+    queue->load = parameter == 2 ? value : LAMBDA / MU;
     
     queue->head = 0;
     queue->tail = 1;
@@ -174,7 +179,7 @@ void enqueue(struct queue *q, struct packet *p) {
     // lambda * exp(-lambda * x)
     
     if(q->head == q->tail + 1 || (q->head == 0 && q->tail == MAX_QLEN - 1)) {
-        p->arrival_time = q->array[q->head].arrival_time + (exp_random(q->lambda) * (q->capacity - 2));
+        p->arrival_time = q->array[q->head].arrival_time + (exp_random(q->lambda) * (q->capacity));
         q->lost++;
     } else {
         p->arrival_time = prev.arrival_time + exp_random(q->lambda);
@@ -221,7 +226,8 @@ void enqueue(struct queue *q, struct packet *p) {
         q->len++;
         q->array[q->tail] = *p;
         q->total_wait_duration += p->wait_duration;
-        
+    } else {
+        q->lost++;
     }
 
     //printf("%s enqueued: %d | arrival_time: %2.6f | departure_time: %2.6f | service_start_time: %2.6f | service_duration: %2.6f | head: %d | tail: %d | len: %d | lost: %d\n", q->id, p->id, p->arrival_time, p->departure_time, p->service_start_time, p->service_duration, q->head, q->tail, q->len, q->lost);
@@ -293,7 +299,7 @@ int main(void) {
     
     out1 = fopen("sim.csv", "w");
     out2 = fopen("perf.csv", "w");
-    out3 = fopen("avg.csv", "w");
+    out3 = QUE_DISC == 0 ? fopen("rnd_avg.csv", "w") : fopen("min_avg.csv", "w");
     
     fprintf(out1, "queue,packet,arrival_time,service_start_time,service_duration,departure_time,head,tail,lost\n");
     fprintf(out2, "seed,λ,μ,ρ,tbp,sbp,tavglen,savglen,tavgwait,savgwait\n");
@@ -303,7 +309,7 @@ int main(void) {
     int j, t;
     double i;
     
-    for(i=MU; i<=2.0; i+=0.1) {
+    for(i=QUE_PMIN; i<=QUE_PMAX; i+=QUE_INCR) {
     
         double tbp = 0.0;
         double tw = 0.0;
@@ -314,11 +320,8 @@ int main(void) {
         
         for(j=0; j<=MAX_ITER - 1; j++) {
             
-            q1 = init_queue("q1");
-            q2 = init_queue("q2");
-            
-            q1->mu = i;
-            q2->mu = i;
+            q1 = init_queue("q1", QUE_PARM, i);
+            q2 = init_queue("q2", QUE_PARM, i);
             
             for(t = 0; t <= MAX_TIME; t++) {
     
