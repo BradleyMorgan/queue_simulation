@@ -304,7 +304,7 @@
     int main(int argc, char *argv[]) {
         
         if( argc != 7 ) {
-            printf("USAGE: \nλ: intensity or arrival rate (i.e. 1.0)\nμ: service rate (i.e. 1.1)\nassignment strategy: (0=random,1=min)\nvariable parameter: (0=lambda,1=mu)\nrange max: (i.e. 3.0)\niterations: number of times to run each simulation\n\n");
+            printf("USAGE: \nλ: intensity or arrival rate (i.e. 1.0)\nμ: service rate (i.e. 1.1)\nassignment strategy: (0=random,1=min)\nvariable parameter: (0=lambda,1=mu)\nrange max: (i.e. 3.0)\niterations: number of times to run each simulation\nparameter increment: (i.e. 0.1)\n\n");
             printf("WARNING: Using default values\n");
         } else {
             LAMBDA = atof(argv[1]);
@@ -314,6 +314,7 @@
             QUE_PMAX = atof(argv[5]);
             QUE_PMIN = QUE_PARM == 0 ? LAMBDA : MU;
             MAX_ITER = atoi(argv[6]);
+            QUE_INCR = atof(argv[7]);
         }
         
         printf("λ=%2.4f\nμ=%2.4f\nassignment strategy=%d\nvariable parameter=%d\nrange max=%2.4f\n\n--------- BEGIN SIMULATION ---------\n\n", LAMBDA, MU, QUE_DISC, QUE_PARM, QUE_PMAX);
