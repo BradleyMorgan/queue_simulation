@@ -23,11 +23,12 @@ const int MAX_QLEN = 10; // maximum queue length
 const int MAX_SERV = 2; // number of servers
 const int MAX_ITER = 20;
 const int QUE_DISC = 0; // 0 for random, 1 for min
-const int QUE_PARM = 1;
+const int QUE_PARM = 1; // 0 for lambda, 1 for mu, 2 for load
 
-const double QUE_PMIN = 0.5;
-const double QUE_PMAX = 3.0;
-const double QUE_INCR = 0.1;
+const double QUE_PMIN = 0.5; // minimum value of chosen parameter above
+const double QUE_PMAX = 3.0; // maximum value of chosen parameter above
+const double QUE_INCR = 0.1; // increment parameter by this value each iteration
+
 const double LAMBDA = 1.0; // base intensity, arrival rate (packets per unit time)
 const double MU = 1.1; // base service rate (processed packets per unit time)
 
@@ -83,7 +84,6 @@ struct queue *init_queue(char *qid, int parameter, double value) {
     queue->t = 0.0;
     queue->lambda = parameter == 0 ? value : LAMBDA;
     queue->mu = parameter == 1 ? value : MU;
-    //queue->load = parameter == 2 ? value : queue->lambda / (2 * queue->mu);
     queue->load = parameter == 2 ? value : queue->lambda / queue->mu;
     
     queue->head = 0;
@@ -114,19 +114,7 @@ struct packet *init_packet(int id) {
     
 }
 
-int full(struct queue *q) {
-    
-    return q->len >= q->capacity;
-    
-}
-
-int empty(struct queue *q) {
-    
-    return q->len == 0;
-    
-}
-
-void display(struct queue *q) {
+void display_queue(struct queue *q) {
     
     int i;
     
@@ -185,11 +173,9 @@ void enqueue(struct queue *q, struct packet *p) {
     // arrivals occur in exponential distribution
     // lambda * exp(-lambda * x)
     
-    //if(q->head == q->tail + 1 || (q->head == 0 && q->tail == (q->capacity - 1))) {
-    //   p->arrival_time = q->array[q->head].arrival_time + exp_random(q->lambda) * q->capacity;
-    //} else {
     p->arrival_time = q->t + exp_random(q->lambda);
-    //}
+    
+    // keep track of the total length
     
     q->total_len += q->len;
     
@@ -215,7 +201,14 @@ void enqueue(struct queue *q, struct packet *p) {
     // we use a circular array with a head and tail pointer
     // to track the front and back packets
 
-    // [1.0][1.4][1.6][1.5][1.8][1.12][1.9][1.9][1.10][1.11]
+    //     departures     |       queue            |   arrivals
+    // [1.00][1.20]|[1.30]|[1.50][1.80][1.90][2.00]|[xxx][xxx][xxx]
+    //                    |  ^                 ^   |
+    //                    | head              tail |
+    
+    // we have to find all departure times that occurred before
+    // the current (arrival) time and dequeue them by
+    // advancing the head and decreasing the count ...
     
     int i;
     
@@ -227,6 +220,10 @@ void enqueue(struct queue *q, struct packet *p) {
         }
     }
 
+    // if the queue is not full, we can add the new packer to the
+    // array at the tail and increase the length, otherwise
+    // the packet is dropped and the loss counter is incremented ...
+    
     if(q->head != q->tail + 1 && !(q->head == 0 && q->tail == q->capacity - 1)) {
         q->tail = (q->tail + 1) % q->capacity;
         q->len++;
@@ -236,6 +233,8 @@ void enqueue(struct queue *q, struct packet *p) {
         q->lost++;
     }
 
+    // the current time is held for reference by the next arrival ...
+    
     q->t = p->arrival_time;
     
     //printf("%s enqueued: %d | arrival_time: %2.6f | departure_time: %2.6f | service_start_time: %2.6f | service_duration: %2.6f | head: %d | tail: %d | len: %d | lost: %d\n", q->id, p->id, p->arrival_time, p->departure_time, p->service_start_time, p->service_duration, q->head, q->tail, q->len, q->lost);
