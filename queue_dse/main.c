@@ -258,8 +258,8 @@
         
         // for an m/m/1/k queue, load is arrival rate divided by the service rate
         
-        double f1 = (1-q->load) * pow(q->load, MAX_QLEN);
-        double f2 = 1 - pow(q->load, MAX_QLEN+1);
+        double f1 = (1-q->load) * pow(q->load, MAX_QLEN-1);
+        double f2 = 1 - pow(q->load, MAX_QLEN);
         double f3 = f1 / f2;
         
         return f3;
@@ -273,8 +273,8 @@
         // at the arrivaltime of a packet per project requirements
         
         double f1 = q->load / (1 - q->load);
-        double f2 = (MAX_QLEN + 1) * pow(q->load, MAX_QLEN + 1);
-        double f3 = 1 - pow(q->load, MAX_QLEN+1);
+        double f2 = (MAX_QLEN + 1) * pow(q->load, MAX_QLEN);
+        double f3 = 1 - pow(q->load, MAX_QLEN);
         double f4 = f2 / f3;
         double f5 = f1 - f4;
         
@@ -290,8 +290,8 @@
         // to the moment when its service is finished
         
         double f1 = calc_qlen(q);
-        double f2 = (1-q->load) * pow(q->load, MAX_QLEN);
-        double f3 = 1 - pow(q->load, MAX_QLEN+1);
+        double f2 = (1-q->load) * pow(q->load, MAX_QLEN-1);
+        double f3 = 1 - pow(q->load, MAX_QLEN);
         double f4 = f2 / f3;
         double f5 = 1 - f4;
         double f6 = q->lambda * f5;
